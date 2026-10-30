@@ -2,6 +2,8 @@ package br.arthur.tvhome
 
 import android.content.Context
 import android.content.Intent
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.net.Uri
 import android.util.Log
 import org.json.JSONArray
@@ -9,6 +11,7 @@ import org.json.JSONObject
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
+import java.time.LocalDate
 
 /** Everything the home screen shows from JustWatch: the spotlight and the two trending grids. */
 data class Discover(
@@ -22,9 +25,9 @@ data class Discover(
  * service), in English and limited to the subscription services installed on this TV. Each
  * title comes with the link to its page in that service's app.
  *
- * Keeping it fresh: the lists are fetched again every few hours, and each title remembers when
- * it first appeared here. A title loses ground for every day it has been showing, so newly
- * trending ones rise to the top and the screen doesn't settle on the same faces for a week.
+ * Keeping it fresh: the lists are fetched again every few hours, and each title remembers on
+ * how many days it has been on screen here. A title loses a little ground for each of those days
+ * (see [Freshness]), so newcomers get their turn and the screen doesn't settle on the same faces.
  */
 class TrendingRepository(private val context: Context) {
     private val cache = File(context.filesDir, "trending.json")
@@ -37,16 +40,15 @@ class TrendingRepository(private val context: Context) {
         if (services.isEmpty()) return Discover()
         // A list saved by an older version lacks the separate popular lists: fetch afresh.
         val raw = (if (isStale()) null else read()?.takeIf { it.has("popularMovies") })
-            ?: runCatching { fetch(services.keys) }
-                .onFailure { Log.w(TAG, "Couldn't fetch trending titles", it) }
-                .getOrNull()
-                ?.also { cache.writeText(it.toString()) }
+            ?: fetchIfDue(services.keys)?.also { cache.writeText(it.toString()) }
             ?: read() // offline: the last list beats an empty screen
             ?: return Discover()
 
-        val firstSeen = readSeen()
+        val now = System.currentTimeMillis()
+        val seen = readSeen(now)
         fun list(kind: String, isShow: Boolean, wide: Boolean) =
-            fresh(parse(raw.optJSONArray(kind) ?: JSONArray(), services, appOrder, isShow, wide), firstSeen)
+            fresh(parse(raw.optJSONArray(kind) ?: JSONArray(), services, appOrder, isShow, wide), seen)
+                .onEach { Freshness.listed(seen, it.key, now) }
 
         // The spotlight: popular films and shows with wide art, about two films to each show.
         // The day is cut into 3-hour parts, and each part shows a different stretch of the
@@ -68,7 +70,10 @@ class TrendingRepository(private val context: Context) {
         val inSpotlight = spotlight.mapTo(HashSet()) { it.title.lowercase() }
         val movies = list("movies", isShow = false, wide = false).filter { it.title.lowercase() !in inSpotlight }.take(GRID)
         val shows = list("shows", isShow = true, wide = false).filter { it.title.lowercase() !in inSpotlight }.take(GRID)
-        writeSeen(firstSeen)
+        val today = LocalDate.now().toEpochDay()
+        (spotlight + movies + shows).forEach { Freshness.shown(seen, it.key, now, today) }
+        Freshness.forget(seen, now)
+        runCatching { this.seen.writeText(Freshness.write(seen)) }
         return Discover(spotlight, movies, shows)
     }
 
@@ -85,31 +90,38 @@ class TrendingRepository(private val context: Context) {
         return List(count) { pool[(start + it) % pool.size] }
     }
 
-    /** Ranks by place in the list, plus a penalty for each day a title has been on show here. */
-    private fun fresh(items: List<ContentItem>, firstSeen: MutableMap<String, Long>): List<ContentItem> {
-        val now = System.currentTimeMillis()
-        return items.withIndex()
+    /** Ranks by place in the list, plus a penalty for the days a title has been on screen here. */
+    private fun fresh(items: List<ContentItem>, seen: Map<String, Seen>): List<ContentItem> =
+        items.withIndex()
             .sortedBy { (rank, item) ->
-                val since = firstSeen.getOrPut(item.key) { now }
-                val days = (now - since) / DAY_MS.toDouble()
                 // PG to TV-14 come first; G and kids' ratings only fill in when there aren't enough.
                 val focus = if (item.rating in FOCUS_RATINGS) 0.0 else OFF_FOCUS_PENALTY
-                rank + days * PENALTY_PER_DAY + focus
+                rank + Freshness.penalty(seen[item.key]) + focus
             }
             .map { it.value }
+
+    private fun readSeen(now: Long): MutableMap<String, Seen> =
+        runCatching { Freshness.read(seen.readText(), now) }.getOrDefault(HashMap())
+
+    /**
+     * Fetches the lists, unless the TV is offline (just woken, Wi-Fi still connecting) or the
+     * last try failed less than [RETRY_MS] ago. Every return to the home screen asks, and each
+     * failed try can hang on the network for half a minute.
+     */
+    private fun fetchIfDue(shortNames: Set<String>): JSONObject? {
+        if (System.currentTimeMillis() - lastFailure < RETRY_MS || !online()) return null
+        return runCatching { fetch(shortNames) }
+            .onFailure {
+                lastFailure = System.currentTimeMillis()
+                Log.w(TAG, "Couldn't fetch trending titles", it)
+            }
+            .getOrNull()
     }
 
-    private fun readSeen(): MutableMap<String, Long> = runCatching {
-        val json = JSONObject(seen.readText())
-        json.keys().asSequence().associateWithTo(HashMap()) { json.getLong(it) }
-    }.getOrDefault(HashMap())
-
-    /** Forgets titles that haven't been around for a while, so a comeback counts as new. */
-    private fun writeSeen(firstSeen: Map<String, Long>) {
-        val cutoff = System.currentTimeMillis() - FORGET_AFTER_MS
-        val json = JSONObject()
-        firstSeen.filterValues { it > cutoff }.forEach { (k, v) -> json.put(k, v) }
-        runCatching { seen.writeText(json.toString()) }
+    private fun online(): Boolean {
+        val connectivity = context.getSystemService(ConnectivityManager::class.java) ?: return true
+        val network = connectivity.activeNetwork ?: return false
+        return connectivity.getNetworkCapabilities(network)?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
     }
 
     private fun read() = cache.takeIf { it.exists() }?.let { runCatching { JSONObject(it.readText()) }.getOrNull() }
@@ -210,9 +222,11 @@ class TrendingRepository(private val context: Context) {
         const val ENDPOINT = "https://apis.justwatch.com/graphql"
         const val IMAGES = "https://images.justwatch.com"
         const val MAX_AGE_MS = 3 * 60 * 60 * 1000L
-        const val DAY_MS = 24 * 60 * 60 * 1000L
-        const val FORGET_AFTER_MS = 21 * DAY_MS
-        const val PENALTY_PER_DAY = 4.0 // a week on show costs a title ~28 places
+        // Just under the half-hourly check, so a failed fetch is tried again on the next one.
+        const val RETRY_MS = 25 * 60 * 1000L
+
+        /** When fetching last failed. Shared, so a rebuilt screen doesn't retry straight away. */
+        @Volatile var lastFailure = 0L
         const val FETCH = 100 // most popular titles are rated R or TV-MA, so look further down
         const val GRID = 12 // two rows of six
         const val SPOTLIGHT_MOVIES = 8

@@ -20,7 +20,7 @@ data class HomeState(
     val hiddenApps: List<TvApp> = emptyList(),
     val inputs: List<TvInput> = emptyList(),
     val continueWatching: List<ContentItem> = emptyList(),
-    /** The spotlight: what the streaming apps recommend (no YouTube videos). */
+    /** The spotlight: films and shows popular on the subscription services here (JustWatch). */
     val recommendations: List<ContentItem> = emptyList(),
     val rows: List<ContentRow> = emptyList(),
     val hiddenRows: List<ContentRow> = emptyList(),

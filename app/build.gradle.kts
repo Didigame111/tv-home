@@ -80,4 +80,8 @@ dependencies {
     implementation(libs.coil.network.okhttp)
     // Talks to the TV's own debugging port, to switch Google TV on just for Freeplay.
     implementation(libs.dadb)
+
+    testImplementation(libs.junit)
+    // Android's org.json is only stubs off the device; the real one for unit tests.
+    testImplementation(libs.org.json)
 }

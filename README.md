@@ -24,8 +24,11 @@ well, without the sponsored content.
 - **Trending movies** and **Trending shows**: what's trending in the US on those same four
   services, two rows of posters each, opening in the service's app. To keep it fresh, the lists
   are fetched again every 3 hours (checked every half hour, even while the TV sits on home),
-  and each title loses about 4 places per day it has been showing here, so newly trending
-  titles rise and old ones make way. Nothing rated above TV-14 / PG-13 is shown (unrated titles
+  and each title gives up 2 places for each day it has been on screen here, for at most a week
+  (14 places): newcomers get a lift in their first week, and after that popularity decides
+  again. A title out of the lists for three weeks is forgotten, so a comeback counts as new. If
+  a fetch fails, the last lists stay up and it's tried again at the next half-hourly check;
+  while the TV is offline (just woken, Wi-Fi still connecting) it doesn't try. Nothing rated above TV-14 / PG-13 is shown (unrated titles
   are left out too, and Continue watching drops TV-MA and R where the app reports a rating).
   Pluto TV, Sling, YouTube and a local news app are never used for
   shows or films anywhere on the home screen.
