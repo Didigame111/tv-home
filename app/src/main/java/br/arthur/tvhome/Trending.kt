@@ -46,9 +46,11 @@ class TrendingRepository(private val context: Context) {
 
         val now = System.currentTimeMillis()
         val seen = readSeen(now)
+        // An old list kept up while offline says nothing about what's listed now.
+        val current = !isStale()
         fun list(kind: String, isShow: Boolean, wide: Boolean) =
             fresh(parse(raw.optJSONArray(kind) ?: JSONArray(), services, appOrder, isShow, wide), seen)
-                .onEach { Freshness.listed(seen, it.key, now) }
+                .onEach { if (current) Freshness.listed(seen, it.key, now) }
 
         // The spotlight: popular films and shows with wide art, about two films to each show.
         // The day is cut into 3-hour parts, and each part shows a different stretch of the
