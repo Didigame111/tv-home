@@ -3,8 +3,8 @@
 # TV Home
 
 An ad-free home screen for the living-room TV: a TCL Google TV (G10 platform, Android 12,
-1.8 GB RAM), reached over network adb (`adb mdns services` finds it). It replaces Google TV's home and keeps what that home did
-well, without the sponsored content.
+1.8 GB RAM), reached over network adb (`adb mdns services` finds it). It replaces Google
+TV's home and keeps what that home did well, without the sponsored content.
 
 - **Top bar**: Search (Assistant), All apps, Live TV (Google TV Freeplay), Inputs (Antenna and
   HDMI 1–3 in one panel), Settings and the clock. The buttons are dark glass with a hairline
@@ -24,11 +24,14 @@ well, without the sponsored content.
 - **Trending movies** and **Trending shows**: what's trending in the US on those same four
   services, two rows of posters each, opening in the service's app. To keep it fresh, the lists
   are fetched again every 3 hours (checked every half hour, even while the TV sits on home),
-  and each title loses about 4 places per day it has been showing here, so newly trending
-  titles rise and old ones make way. Nothing rated above TV-14 / PG-13 is shown (unrated titles
-  are left out too, and Continue watching drops TV-MA and R where the app reports a rating).
-  Pluto TV, Sling, YouTube and a local news app are never used for
-  shows or films anywhere on the home screen.
+  and each title gives up 2 places for each day it has been on screen here, for at most a week
+  (14 places): newcomers get a lift in their first week, and after that popularity decides
+  again. A title out of the lists for three weeks is forgotten, so a comeback counts as new. If
+  a fetch fails, the last lists stay up and it isn't tried again for 25 minutes; while the TV
+  is offline (just woken, Wi-Fi still connecting) it doesn't try. Nothing rated above TV-14 /
+  PG-13 is shown (unrated titles are left out too, and Continue watching drops TV-MA and R
+  where the app reports a rating). Pluto TV, Sling, YouTube and a local news app are never
+  used for shows or films anywhere on the home screen.
 - **All apps** is a page of its own (the tile, or the top bar's All apps), with hidden apps,
   rows and shows behind "Show N hidden". Back returns to the home screen.
 - A **Clock** screensaver in place of Ambient mode.
