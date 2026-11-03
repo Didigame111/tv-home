@@ -119,7 +119,6 @@ class SkyView(context: Context) : View(context) {
 
     private var horizon = 0f
     private var maskTop = 0
-    private var landDay = -1L
     private val hills = arrayOfNulls<Bitmap>(4)
     private val hillMix = floatArrayOf(0.28f, 0.52f, 0.76f, 1f)
 
@@ -212,9 +211,8 @@ class SkyView(context: Context) : View(context) {
         }
     }
 
-    /** Hills and the valley's lamps: a new landscape every day. */
+    /** Hills and the valley's lamps: a new landscape each day, chosen when the screensaver starts. */
     private fun buildLand(w: Int, h: Int, day: Long) {
-        landDay = day
         val rnd = Random(day)
         maskTop = (h * 0.52f).toInt()
         val bases = floatArrayOf(0.66f, 0.745f, 0.83f, 0.915f)
@@ -315,7 +313,6 @@ class SkyView(context: Context) : View(context) {
     private fun updateLook(w: Int, h: Int) {
         val now = sceneNow()
         val c = Calendar.getInstance().apply { timeInMillis = now }
-        if (c.get(Calendar.YEAR) * 1000L + c.get(Calendar.DAY_OF_YEAR) != landDay) buildLand(w, h, today())
         val m = c.get(Calendar.HOUR_OF_DAY) * 60 + c.get(Calendar.MINUTE) + c.get(Calendar.SECOND) / 60f
         minuteOfDay = m
         val (e, frac) = elevation(m)
@@ -362,6 +359,10 @@ class SkyView(context: Context) : View(context) {
             sunX, sunY, dp(150f),
             intArrayOf(withAlpha(sunColor, 0.45f), withAlpha(sunColor, 0.12f), Color.TRANSPARENT),
             floatArrayOf(0f, 0.35f, 1f), Shader.TileMode.CLAMP,
+        )
+        moonHalo.shader = RadialGradient(
+            moonX, moonY, dp(120f),
+            withAlpha(0xFFDDE4FF.toInt(), 0.18f * max(starVis, 0.35f) * moonLit()), Color.TRANSPARENT, Shader.TileMode.CLAMP,
         )
         paintBack(w)
         paintFront(w, h)
@@ -490,8 +491,7 @@ class SkyView(context: Context) : View(context) {
 
     private fun drawShootingStar(canvas: Canvas, w: Int, h: Int, real: Long) {
         if (shootNext == 0L) shootNext = real + 8_000
-        if (starVis < 0.7f) return
-        if (shootStart == 0L && real > shootNext) {
+        if (shootStart == 0L && real > shootNext && starVis >= 0.7f) {
             shootStart = real
             val left = Random.nextBoolean()
             val angle = (0.3f + Random.nextFloat() * 0.35f)
@@ -527,8 +527,7 @@ class SkyView(context: Context) : View(context) {
         val cy = moonY
         val night = max(starVis, 0.35f)
         // A soft halo, then the dark disc faintly (earthshine), then the lit part.
-        moonHalo.shader = RadialGradient(cx, cy, r * 5, withAlpha(0xFFDDE4FF.toInt(), 0.18f * night * moonLit()), Color.TRANSPARENT, Shader.TileMode.CLAMP)
-        canvas.drawCircle(cx, cy, r * 5, moonHalo)
+        canvas.drawCircle(cx, cy, dp(120f), moonHalo)
         moonPaint.color = withAlpha(0xFF2A3154.toInt(), 0.55f * starVis)
         canvas.drawCircle(cx, cy, r, moonPaint)
 
