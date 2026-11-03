@@ -31,5 +31,5 @@ DISABLE=(
   com.google.android.apps.tv.launcherx    # Google TV home (156 MB), replaced by TV Home; TV Home
                                           # switches it on only while Live TV (Freeplay) is open
   com.google.android.tungsten.setupwraith # Setup "recovery" screen that grabs the Home key
-  com.google.android.apps.tv.dreamx       # Ambient mode (77 MB), replaced by the Clock screensaver
+  com.google.android.apps.tv.dreamx       # Ambient mode (77 MB), replaced by the Sky and Clock screensavers
 )

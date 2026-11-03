@@ -34,7 +34,13 @@ TV's home and keeps what that home did well, without the sponsored content.
   used for shows or films anywhere on the home screen.
 - **All apps** is a page of its own (the tile, or the top bar's All apps), with hidden apps,
   rows and shows behind "Show N hidden". Back returns to the home screen.
-- A **Clock** screensaver in place of Ambient mode.
+- Two screensavers in place of Ambient mode. **Sky** (the default) is a window onto hills under
+  a sky that follows the time of day: the sun crosses from 6:30 to 18:30, dawn and dusk colour
+  the horizon, and at night the stars wheel slowly round the pole, the moon shows its real phase,
+  a shooting star crosses now and then, and lamps light up in the valley (most go out between
+  21:30 and 01:30). Clouds drift by, and the hills are a new range every day. **Clock** is the
+  original: the time on black. Hold OK on the Settings button to switch between them or preview
+  either. The Sky repaints its slow parts every two seconds and draws at 15 fps.
 
 The page is not a scroll container: a Column translated on the GPU, so the focused row glides
 to a fixed height and the sections above it fade out. The background tint is read only at draw
@@ -92,6 +98,7 @@ The first Live TV press makes the TV ask "Allow USB debugging?" for TV Home's ow
 adb connect <tv-ip>:5555        # `adb mdns services` lists it
 adb install -r app/build/outputs/apk/release/app-release.apk
 adb shell pm grant br.arthur.tvhome android.permission.READ_TV_LISTINGS
+adb shell pm grant br.arthur.tvhome android.permission.WRITE_SECURE_SETTINGS   # screensaver switch
 adb shell cmd appops set br.arthur.tvhome APP_AUTO_START allow
 adb shell cmd package compile -m speed -f br.arthur.tvhome
 ```
@@ -99,11 +106,15 @@ adb shell cmd package compile -m speed -f br.arthur.tvhome
 Release builds are signed with `tvhome-release.jks` (`keystore.properties`). Both are
 gitignored; keep them, since updates only install over an app signed with the same key.
 
+To try a screensaver at another time of day, open its preview over adb (any key closes it):
+`adb shell am start -n br.arthur.tvhome/.ScreensaverPreview --es style SKY --ei minute 1140 --ef speed 60`
+shows the sky from 19:00, a minute every second.
+
 ## Cleaning the TV
 
 `scripts/debloat.sh` removes ads, trackers and store-demo apps for user 0 (Samba TV, TCL's
 ad, telemetry, account, Alexa and demo apps, Play Games…), disables Google TV home, the
-setup "recovery" screen and Ambient mode, makes TV Home the launcher, sets the Clock
+setup "recovery" screen and Ambient mode, makes TV Home the launcher, sets the Sky
 screensaver and halves animation lengths. The list, with a reason for each, is in
 `scripts/packages.sh`.
 

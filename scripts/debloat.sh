@@ -22,9 +22,11 @@ adb shell cmd package compile -m speed -f br.arthur.tvhome >/dev/null
 # needs them to tidy up after Live TV.
 adb shell cmd appops set br.arthur.tvhome APP_AUTO_START allow
 
-# The Clock screensaver instead of Ambient mode.
-adb shell settings put secure screensaver_components br.arthur.tvhome/.ClockDream
+# The Sky screensaver instead of Ambient mode (Clock is the other choice; hold OK on Settings in
+# TV Home to switch). The permission lets TV Home make that switch itself.
+adb shell settings put secure screensaver_components br.arthur.tvhome/.SkyDream
 adb shell settings put secure screensaver_enabled 1
+adb shell pm grant br.arthur.tvhome android.permission.WRITE_SECURE_SETTINGS
 
 # Snappier menus: half-length animations.
 adb shell settings put global window_animation_scale 0.5
