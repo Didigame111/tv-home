@@ -485,6 +485,25 @@ fun HomeScreen(vm: HomeViewModel) {
         )
     }
 
+    // Hold OK on Settings: pick or preview the screensaver.
+    fun screensaverMenu() {
+        val now = Screensavers.current(context)
+        menu = Menu(
+            title = "Screensaver",
+            subtitle = "Now: ${now?.label ?: "another app's"}. Sky follows the time of day; Clock is the time on black.",
+            actions = Screensavers.Style.entries.map { style ->
+                (if (style == now) "${style.label} (on)" else "Use ${style.label}") to {
+                    if (style != now) {
+                        scope.launch {
+                            val ok = withContext(Dispatchers.IO) { runCatching { Screensavers.choose(context, style) }.isSuccess }
+                            Toast.makeText(context, if (ok) "Screensaver: ${style.label}" else "Couldn't change the screensaver", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }
+            } + Screensavers.Style.entries.map { style -> "Preview ${style.label}" to { Screensavers.preview(context, style) } },
+        )
+    }
+
     @Composable
     fun Section(key: String, content: @Composable ColumnScope.() -> Unit) {
         // Sections above the focused one step out of the way once you're below the top.
@@ -641,6 +660,7 @@ fun HomeScreen(vm: HomeViewModel) {
                             .onFocusChanged { liveTvFocused = it.isFocused },
                         onInputs = if (state.inputs.isNotEmpty()) ::inputsMenu else null,
                         onSettings = { open(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), "Settings") },
+                        onSettingsLong = ::screensaverMenu,
                     )
                     Box(
                         Modifier
@@ -1182,6 +1202,7 @@ private fun TopBar(
     liveTvModifier: Modifier,
     onInputs: (() -> Unit)?,
     onSettings: () -> Unit,
+    onSettingsLong: () -> Unit,
 ) {
     Row(
         Modifier
@@ -1197,7 +1218,7 @@ private fun TopBar(
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
             if (onLiveTv != null) Pill("Live TV", modifier = liveTvModifier, onClick = onLiveTv)
             if (onInputs != null) Pill("Inputs", onClick = onInputs)
-            RoundIcon(Icons.Default.Settings, "Settings", onSettings)
+            RoundIcon(Icons.Default.Settings, "Settings", onSettings, onSettingsLong)
             if (showClock) {
                 Spacer(Modifier.width(8.dp))
                 BasicText(ClockFormat.time(LocalContext.current, rememberNow()), style = TopClock)

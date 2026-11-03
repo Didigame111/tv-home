@@ -597,12 +597,12 @@ fun Pill(
 }
 
 @Composable
-fun RoundIcon(icon: ImageVector, description: String, onClick: () -> Unit) {
+fun RoundIcon(icon: ImageVector, description: String, onClick: () -> Unit, onLongClick: (() -> Unit)? = null) {
     var focused by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(if (focused) 1.06f else 1f, tween(150), label = "icon")
     Box(
         Modifier
-            .tvClickable(onClick)
+            .tvClickable(onClick, onLongClick)
             .onFocusChanged { focused = it.isFocused }
             .focusable()
             .semantics {
