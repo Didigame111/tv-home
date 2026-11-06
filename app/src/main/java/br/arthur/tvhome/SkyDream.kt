@@ -83,7 +83,8 @@ class SkySaver(context: Context) : Saver {
  * shower. Clouds drift across all day.
  *
  * Kept cheap for the TV: the sky and the hills are repainted into bitmaps every couple of seconds,
- * clouds are pre-blurred masks, and frames come at 15 fps (30 while shooting stars cross).
+ * clouds are pre-blurred masks, and frames come at 15 fps (about 30 while a shooting star crosses
+ * and through the meteor shower).
  */
 class SkyView(context: Context) : View(context) {
     private val density = resources.displayMetrics.density
@@ -512,10 +513,10 @@ class SkyView(context: Context) : View(context) {
     private fun drawShower(canvas: Canvas, w: Int, real: Long, dt: Float) {
         showerLevel = shower(minuteOfDay) * starVis
         if (showerLevel > 0f) {
-            // About one and a half a second at the height of it, and a burst now and then.
-            if (Random.nextFloat() < 1.5f * showerLevel * dt) {
+            // About two and a half a second at the height of it, and a burst now and then.
+            if (Random.nextFloat() < 2.5f * showerLevel * dt) {
                 launchMeteor(w, real)
-                if (Random.nextFloat() < 0.12f) repeat(1 + Random.nextInt(3)) {
+                if (Random.nextFloat() < 0.15f) repeat(2 + Random.nextInt(3)) {
                     launchMeteor(w, real + 90 + Random.nextLong(320))
                 }
             }
@@ -530,21 +531,22 @@ class SkyView(context: Context) : View(context) {
         val ry = horizon * 0.1f
         for (attempt in 0 until 6) {
             val a = (-0.15f + Random.nextFloat() * 1.3f) * PI.toFloat()
-            val d = dp(30f) + Random.nextFloat().pow(0.8f) * w * 0.55f
+            val d = dp(60f) + Random.nextFloat().pow(0.8f) * w * 0.55f
             val x = rx + cos(a) * d
             val y = ry + sin(a) * d
-            if (x < 0 || x > w || y < 0 || y > horizon * 0.82f) continue
+            // Skip ones that would leave through the top before they show.
+            if (x < 0 || x > w || y < 0 || y > horizon * 0.82f || (sin(a) < 0 && y < dp(80f))) continue
             m.active = true
             m.start = at
-            m.fireball = Random.nextFloat() < 0.06f
+            m.fireball = Random.nextFloat() < 0.08f
             m.x = x
             m.y = y
             m.dx = cos(a)
             m.dy = sin(a)
             // Meteors far from the radiant come in at a shallower angle, so their streaks are longer.
-            m.length = (dp(45f) + d * 0.42f) * (0.7f + Random.nextFloat() * 0.6f) * (if (m.fireball) 1.6f else 1f)
+            m.length = (dp(70f) + d * 0.55f) * (0.7f + Random.nextFloat() * 0.6f) * (if (m.fireball) 1.6f else 1f)
             m.duration = if (m.fireball) 1_500f else 450f + Random.nextFloat() * 650f
-            m.width = if (m.fireball) dp(2.6f) else dp(1.1f + Random.nextFloat() * 0.8f)
+            m.width = if (m.fireball) dp(3.2f) else dp(1.5f + Random.nextFloat() * 1.1f)
             val tint = Random.nextFloat()
             m.color = when {
                 m.fireball -> 0xFFD8FFE6.toInt()
@@ -580,7 +582,7 @@ class SkyView(context: Context) : View(context) {
             val shader = LinearGradient(tx, ty, hx, hy, Color.TRANSPARENT, withAlpha(m.color, bright), Shader.TileMode.CLAMP)
             meteorGlow.shader = shader
             meteorGlow.strokeWidth = m.width * 3.5f
-            meteorGlow.alpha = 70
+            meteorGlow.alpha = 95
             canvas.drawLine(tx, ty, hx, hy, meteorGlow)
             meteorCore.shader = shader
             meteorCore.strokeWidth = m.width
