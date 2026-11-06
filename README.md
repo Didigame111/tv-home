@@ -37,10 +37,12 @@ TV's home and keeps what that home did well, without the sponsored content.
 - Two screensavers in place of Ambient mode. **Sky** (the default) is a window onto hills under
   a sky that follows the time of day: the sun crosses from 6:30 to 18:30, dawn and dusk colour
   the horizon, and at night the stars wheel slowly round the pole, the moon shows its real phase,
-  a shooting star crosses now and then, and lamps light up in the valley (most go out between
+  a shooting star crosses now and then (and from 23:00 to midnight, a whole meteor shower:
+  meteors fanning out from one point, in bursts, with the odd fireball), and lamps light up in the valley (most go out between
   21:30 and 01:30). Clouds drift by, and the hills are a new range every day. **Clock** is the
   original: the time on black. Hold OK on the Settings button to switch between them or preview
-  either. The Sky repaints its slow parts every two seconds and draws at 15 fps.
+  either. The Sky repaints its slow parts every two seconds and draws at 15 fps (30 while
+  shooting stars cross).
 
 The page is not a scroll container: a Column translated on the GPU, so the focused row glides
 to a fixed height and the sections above it fade out. The background tint is read only at draw
