@@ -79,10 +79,12 @@ class SkySaver(context: Context) : Saver {
  * A window onto hills under the real sky. The sun crosses from 6:30 to 18:30, dawn and dusk warm
  * the horizon, and at night the stars come out and wheel slowly round the pole, the moon shows
  * tonight's phase, a shooting star crosses now and then, and lamps come on in the valley (most go
- * out late at night, and come back on before dawn). Clouds drift across all day.
+ * out late at night, and come back on before dawn). From 23:00 to midnight there's a meteor
+ * shower. Clouds drift across all day.
  *
  * Kept cheap for the TV: the sky and the hills are repainted into bitmaps every couple of seconds,
- * clouds are pre-blurred masks, and frames come at 15 fps (30 while a shooting star crosses).
+ * clouds are pre-blurred masks, and frames come at 15 fps (about 30 while a shooting star crosses
+ * and through the meteor shower).
  */
 class SkyView(context: Context) : View(context) {
     private val density = resources.displayMetrics.density
@@ -447,6 +449,7 @@ class SkyView(context: Context) : View(context) {
 
         drawStars(canvas, w, t)
         drawShootingStar(canvas, w, h, real)
+        drawShower(canvas, w, real, dt)
 
         if (moonElev > -0.08f && moonLit() > 0.03f) drawMoon(canvas)
         if (sunElev > -0.1f) {
@@ -465,8 +468,137 @@ class SkyView(context: Context) : View(context) {
 
         front?.let { canvas.drawBitmap(it, 0f, maskTop.toFloat(), null) }
 
-        // 15 fps is plenty for drifting clouds and twinkling; a shooting star gets 30.
-        if (running) postOnAnimationDelayed(frame, if (shootStart != 0L) 30 else 63)
+        // 15 fps is plenty for drifting clouds and twinkling; shooting stars get 30.
+        val fast = shootStart != 0L || showerLevel > 0f || meteors.any { it.active }
+        if (running) postOnAnimationDelayed(frame, if (fast) 30 else 63)
+    }
+
+    // ---------------------------------------------------------------- the 11 pm meteor shower
+
+    /**
+     * From 23:00 to midnight the sky puts on a meteor shower: meteors streak out from one point
+     * high in the sky (the radiant), a few at a time, now and then in a burst, with the odd
+     * fireball that leaves a glowing trail behind it. It builds up over the first few minutes
+     * and tails off before midnight.
+     */
+    private class Meteor {
+        var active = false
+        var start = 0L
+        var duration = 0f
+        var x = 0f
+        var y = 0f
+        var dx = 0f
+        var dy = 0f
+        var length = 0f
+        var width = 0f
+        var color = Color.WHITE
+        var fireball = false
+    }
+
+    private val meteors = Array(14) { Meteor() }
+    private var showerLevel = 0f
+    private val meteorGlow = Paint(Paint.ANTI_ALIAS_FLAG).apply { strokeCap = Paint.Cap.ROUND }
+    private val meteorCore = Paint(Paint.ANTI_ALIAS_FLAG).apply { strokeCap = Paint.Cap.ROUND }
+    private val meteorHead = Paint(Paint.ANTI_ALIAS_FLAG)
+
+    /** How busy the shower is at this minute of the day: 0 outside 23:00–00:00, 1 at its height. */
+    private fun shower(m: Float): Float {
+        if (m < SHOWER_START || m >= 1440f) return 0f
+        val rise = ((m - SHOWER_START) / 4f).coerceIn(0f, 1f)
+        val fall = ((1440f - m) / 10f).coerceIn(0f, 1f)
+        fun smooth(x: Float) = x * x * (3 - 2 * x)
+        return smooth(rise) * smooth(fall)
+    }
+
+    private fun drawShower(canvas: Canvas, w: Int, real: Long, dt: Float) {
+        showerLevel = shower(minuteOfDay) * starVis
+        if (showerLevel > 0f) {
+            // About two and a half a second at the height of it, and a burst now and then.
+            if (Random.nextFloat() < 2.5f * showerLevel * dt) {
+                launchMeteor(w, real)
+                if (Random.nextFloat() < 0.15f) repeat(2 + Random.nextInt(3)) {
+                    launchMeteor(w, real + 90 + Random.nextLong(320))
+                }
+            }
+        }
+        for (m in meteors) if (m.active) drawMeteor(canvas, m, real)
+    }
+
+    private fun launchMeteor(w: Int, at: Long) {
+        val m = meteors.firstOrNull { !it.active } ?: return
+        // The radiant sits high up, left of centre; meteors fan out from it, mostly downward.
+        val rx = w * 0.36f
+        val ry = horizon * 0.1f
+        for (attempt in 0 until 6) {
+            val a = (-0.15f + Random.nextFloat() * 1.3f) * PI.toFloat()
+            val d = dp(60f) + Random.nextFloat().pow(0.8f) * w * 0.55f
+            val x = rx + cos(a) * d
+            val y = ry + sin(a) * d
+            // Skip ones that would leave through the top before they show.
+            if (x < 0 || x > w || y < 0 || y > horizon * 0.82f || (sin(a) < 0 && y < dp(80f))) continue
+            m.active = true
+            m.start = at
+            m.fireball = Random.nextFloat() < 0.08f
+            m.x = x
+            m.y = y
+            m.dx = cos(a)
+            m.dy = sin(a)
+            // Meteors far from the radiant come in at a shallower angle, so their streaks are longer.
+            m.length = (dp(70f) + d * 0.55f) * (0.7f + Random.nextFloat() * 0.6f) * (if (m.fireball) 1.6f else 1f)
+            m.duration = if (m.fireball) 1_500f else 450f + Random.nextFloat() * 650f
+            m.width = if (m.fireball) dp(3.2f) else dp(1.5f + Random.nextFloat() * 1.1f)
+            val tint = Random.nextFloat()
+            m.color = when {
+                m.fireball -> 0xFFD8FFE6.toInt()
+                tint < 0.55f -> 0xFFF4F7FF.toInt()
+                tint < 0.72f -> 0xFFC8FFDC.toInt()
+                tint < 0.88f -> 0xFFFFE6B0.toInt()
+                else -> 0xFFCDDDFF.toInt()
+            }
+            return
+        }
+    }
+
+    private fun drawMeteor(canvas: Canvas, m: Meteor, real: Long) {
+        if (real < m.start) return
+        val p = (real - m.start) / m.duration
+        // A fireball's trail lingers, fading, for a little over a second after it burns out.
+        val linger = if (m.fireball) 0.8f else 0f
+        if (p >= 1f + linger) {
+            m.active = false
+            return
+        }
+        val reach = m.length * 1.5f
+        val head = reach * (1 - (1 - min(p, 1f)).pow(2))
+        val hx = m.x + m.dx * head
+        val hy = m.y + m.dy * head
+        val vis = starVis
+        if (p < 1f) {
+            // The streak grows behind the head, then the tail catches up as it burns out.
+            val tail = m.length * min(1f, p * 3f) * (1f - 0.5f * ((p - 0.7f) / 0.3f).coerceIn(0f, 1f))
+            val tx = hx - m.dx * tail
+            val ty = hy - m.dy * tail
+            val bright = (min(1f, p * 6f) * min(1f, (1f - p) * 3f) * vis).coerceIn(0f, 1f)
+            val shader = LinearGradient(tx, ty, hx, hy, Color.TRANSPARENT, withAlpha(m.color, bright), Shader.TileMode.CLAMP)
+            meteorGlow.shader = shader
+            meteorGlow.strokeWidth = m.width * 3.5f
+            meteorGlow.alpha = 95
+            canvas.drawLine(tx, ty, hx, hy, meteorGlow)
+            meteorCore.shader = shader
+            meteorCore.strokeWidth = m.width
+            canvas.drawLine(tx, ty, hx, hy, meteorCore)
+            meteorHead.color = withAlpha(Color.WHITE, bright)
+            canvas.drawCircle(hx, hy, m.width * (if (m.fireball) 1.4f else 0.9f), meteorHead)
+        } else {
+            // What's left of a fireball: a faint green train along its path.
+            val f = 1f - (p - 1f) / linger
+            val sx = m.x + m.dx * m.length * 0.2f
+            val sy = m.y + m.dy * m.length * 0.2f
+            meteorGlow.shader = LinearGradient(sx, sy, hx, hy, Color.TRANSPARENT, withAlpha(0xFF9CF0C0.toInt(), 0.35f * f * vis), Shader.TileMode.CLAMP)
+            meteorGlow.strokeWidth = m.width * 2.5f
+            meteorGlow.alpha = 255
+            canvas.drawLine(sx, sy, hx, hy, meteorGlow)
+        }
     }
 
     private fun drawStars(canvas: Canvas, w: Int, t: Float) {
@@ -605,6 +737,7 @@ class SkyView(context: Context) : View(context) {
 
     companion object {
         private const val LAMP = 0xFFFFC870.toInt()
+        private const val SHOWER_START = 23 * 60f
         private val E = floatArrayOf(-1f, -0.35f, -0.15f, -0.04f, 0.04f, 0.15f, 0.35f, 1f)
 
         private fun ramp(vararg c: Long) = Ramp(E, IntArray(c.size) { c[it].toInt() })
